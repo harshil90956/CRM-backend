@@ -1,0 +1,160 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum StaffRole {
+  ADMIN
+  MANAGER
+  AGENT
+}
+
+enum BookingStatus {
+  HOLD_REQUESTED
+  HOLD_APPROVED
+  BOOKED
+  CANCELLED
+  EXPIRED
+}
+
+enum UnitStatus {
+  AVAILABLE
+  HELD
+  SOLD
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+}
+
+model Staff {
+  id       String    @id @default(uuid())
+  name     String
+  email    String    @unique
+  password String
+  role     StaffRole
+  isActive Boolean   @default(true)
+
+  leads   Lead[]
+  reviews Review[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Customer {
+  id    String @id @default(uuid())
+  name  String
+  email String @unique
+  phone String
+
+  bookings Booking[]
+  leads    Lead[]
+  reviews  Review[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Project {
+  id       String @id @default(uuid())
+  name     String
+  location String
+
+  units   Unit[]
+  reviews Review[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Unit {
+  id     String     @id @default(uuid())
+  unitNo String
+  status UnitStatus @default(AVAILABLE)
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id])
+
+  bookings Booking[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Booking {
+  id     String        @id @default(uuid())
+  status BookingStatus
+
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
+
+  unitId String
+  unit   Unit   @relation(fields: [unitId], references: [id])
+
+  payments Payment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Payment {
+  id     String        @id @default(uuid())
+  amount Float
+  status PaymentStatus
+
+  bookingId String
+  booking   Booking @relation(fields: [bookingId], references: [id])
+
+  reminders PaymentReminder[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PaymentReminder {
+  id   String  @id @default(uuid())
+  sent Boolean @default(false)
+
+  paymentId String
+  payment   Payment @relation(fields: [paymentId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+model Lead {
+  id    String @id @default(uuid())
+  name  String
+  phone String
+
+  staffId String
+  staff   Staff  @relation(fields: [staffId], references: [id])
+
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+model Review {
+  id      String @id @default(uuid())
+  rating  Int
+  comment String
+
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
+
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id])
+
+  staffId String?
+  staff   Staff?  @relation(fields: [staffId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
