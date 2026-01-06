@@ -1,1 +1,9 @@
-// TODO: Implemented in later phase by assigned developer
+import { Module } from '@nestjs/common';
+
+import { EnvService } from './env/env.service';
+
+@Module({
+  providers: [EnvService],
+  exports: [EnvService],
+})
+export class ConfigModule {}

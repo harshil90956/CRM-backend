@@ -1,77 +1,70 @@
-import "dotenv/config";
-import { PrismaClient } from "@prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
-import bcrypt from "bcrypt";
-import { Pool } from "pg";
+// import "dotenv/config";
+// import { PrismaClient, StaffRole } from "@prisma/client";
+// import bcrypt from "bcrypt";
 
-async function seedStaff(
-  prisma: PrismaClient,
-  name: string,
-  email: string,
-  password: string
-) {
-  const existing = await prisma.staff.findUnique({
-    where: { email },
-  });
+// async function seedStaff(
+//   prisma: PrismaClient,
+//   name: string,
+//   email: string,
+//   password: string,
+//   role: StaffRole
+// ) {
+//   const existing = await prisma.staff.findUnique({
+//     where: { email },
+//   });
 
-  if (existing) {
-    console.log(`ℹ️ ${email} already exists`);
-    return;
-  }
+//   if (existing) {
+//     console.log(`ℹ️ ${email} already exists`);
+//     return;
+//   }
 
-  const hashedPassword = await bcrypt.hash(password, 10);
+//   const hashedPassword = await bcrypt.hash(password, 10);
 
-  await prisma.staff.create({
-    data: {
-      name,
-      email,
-      password: hashedPassword,
-      role: "ADMIN",     // enum as string (Prisma v7 safe)
-      isActive: true,
-    },
-  });
+//   await prisma.staff.create({
+//     data: {
+//       name,
+//       email,
+//       password: hashedPassword,
+//       role,
+//       isActive: true,
+//     },
+//   });
 
-  console.log(`✅ ${email} created`);
-}
+//   console.log(`✅ ${email} created`);
+// }
 
-async function main() {
-  console.log("🌱 Running seed...");
+// async function main() {
+//   console.log("🌱 Running seed...");
 
-  const connectionString = process.env["DATABASE_URL"];
-  if (!connectionString) {
-    throw new Error("DATABASE_URL is not set");
-  }
+//   const prisma = new PrismaClient();
 
-  const pool = new Pool({ connectionString });
-  const adapter = new PrismaPg(pool);
-  const prisma = new PrismaClient({ adapter });
+//   try {
+//     /* ---------- SUPER ADMIN ---------- */
+//     await seedStaff(
+//       prisma,
+//       "Super Admin",
+//       "superadmin@apexrealtycrm.com",
+//       "123456",
+//       StaffRole.SUPER_ADMIN
+//     );
 
-  try {
-    /* ---------- SUPER ADMIN ---------- */
-    await seedStaff(
-      prisma,
-      "Super Admin",
-      "superadmin@apexrealty.com",
-      "Super@123"
-    );
+//     /* ---------- ADMIN ---------- */
+//     await seedStaff(
+//       prisma,
+//       "Admin",
+//       "admin@apexrealtycrm.com",
+//       "123456",
+//       StaffRole.ADMIN
+//     );
 
-    /* ---------- ADMIN ---------- */
-    await seedStaff(
-      prisma,
-      "Admin",
-      "admin@apexrealty.com",
-      "Admin@123"
-    );
+//     console.log("🎉 Staff seeding completed");
+//   } finally {
+//     await prisma.$disconnect();
+//   }
+// }
 
-    console.log("🎉 Staff seeding completed");
-  } finally {
-    await prisma.$disconnect();
-    await pool.end();
-  }
-}
-
-main()
-  .catch((e) => {
-    console.error("❌ Seed failed:", e);
-    process.exit(1);
-  });
+// main()
+//   .catch((e) => {
+//     console.error("❌ Seed failed:", e);
+//     process.exit(1);
+//   });
