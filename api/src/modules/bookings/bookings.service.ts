@@ -73,7 +73,13 @@ export class BookingsService {
       data: {
         unitId: dto.unitId,
         customerId: dto.customerId,
-        status: 'HOLD_REQUESTED' as any,
+        projectId: dto.projectId,
+        agentId: dto.agentId,
+        managerId: dto.managerId,
+        totalPrice: dto.totalPrice,
+        tokenAmount: dto.tokenAmount,
+        status: 'HOLD_REQUESTED',
+        tenantId: dto.tenantId,
       },
     });
 

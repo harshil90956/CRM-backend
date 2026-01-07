@@ -1,163 +1,195 @@
-/* eslint-disable no-console */
 import { PrismaClient } from "@prisma/client";
-import bcrypt from "bcrypt";
 
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log("🌱 Seeding database...");
+  console.log("🌱 Seeding database (Phase 8A clean seed)...");
 
-  // -----------------------------
-  // Passwords
-  // -----------------------------
-  const superAdminPassword = await bcrypt.hash("SuperAdmin@123", 10);
-  const adminPassword = await bcrypt.hash("Admin@123", 10);
-  const managerPassword = await bcrypt.hash("Manager@123", 10);
-  const agentPassword = await bcrypt.hash("Agent@123", 10);
+  const TENANT_ID = "tenant_default";
 
-  // -----------------------------
-  // STAFF (Super Admin, Admin, Manager, Agent)
-  // -----------------------------
-  const superAdmin = await prisma.staff.create({
+  /* =========================
+     USERS (ADMIN / MANAGER / AGENT / CUSTOMER)
+     ========================= */
+
+  const superAdmin = await prisma.user.create({
     data: {
       name: "Super Admin",
       email: "superadmin@crm.com",
-      role: "ADMIN",
-      password: superAdminPassword,
-      isActive: true,
+      phone: "9999999999",
+      role: "SUPER_ADMIN",
+      tenantId: TENANT_ID,
     },
   });
 
-  const admin = await prisma.staff.create({
+  const manager = await prisma.user.create({
     data: {
-      name: "Admin User",
-      email: "admin@crm.com",
-      role: "ADMIN",
-      password: adminPassword,
-      isActive: true,
-    },
-  });
-
-  const manager = await prisma.staff.create({
-    data: {
-      name: "Manager User",
+      name: "Sales Manager",
       email: "manager@crm.com",
+      phone: "8888888888",
       role: "MANAGER",
-      password: managerPassword,
-      isActive: true,
+      tenantId: TENANT_ID,
+      managerId: superAdmin.id,
     },
   });
 
-  const agent = await prisma.staff.create({
+  const agent = await prisma.user.create({
     data: {
-      name: "Agent User",
+      name: "Sales Agent",
       email: "agent@crm.com",
+      phone: "7777777777",
       role: "AGENT",
-      password: agentPassword,
-      isActive: true,
+      tenantId: TENANT_ID,
+      managerId: manager.id,
     },
   });
 
-  console.log("✅ Staff seeded");
-
-  // -----------------------------
-  // PROJECTS
-  // -----------------------------
-  const project1 = await prisma.project.create({
+  const customer = await prisma.user.create({
     data: {
-      name: "Apex Residency",
+      name: "Customer One",
+      email: "customer@crm.com",
+      phone: "6666666666",
+      role: "CUSTOMER",
+      tenantId: TENANT_ID,
+    },
+  });
+
+  /* =========================
+     PROJECT
+     ========================= */
+
+  const project = await prisma.project.create({
+    data: {
+      name: "Skyline Residency",
       location: "Ahmedabad",
+      mainType: "Residential",
+      priceRange: "₹75L - ₹1.2Cr",
+      status: "Active",
+      tenantId: TENANT_ID,
     },
   });
 
-  const project2 = await prisma.project.create({
-    data: {
-      name: "Skyline Heights",
-      location: "Surat",
-    },
-  });
+  /* =========================
+     UNIT
+     ========================= */
 
-  console.log("✅ Projects seeded");
-
-  // -----------------------------
-  // UNITS
-  // -----------------------------
-  const unit1 = await prisma.unit.create({
+  const unit = await prisma.unit.create({
     data: {
       unitNo: "A-101",
+      projectId: project.id,
       status: "AVAILABLE",
-      projectId: project1.id,
+      price: 8500000,
+      bedrooms: 3,
+      bathrooms: 2,
+      floorNumber: 1,
+      tenantId: TENANT_ID,
     },
   });
 
-  const unit2 = await prisma.unit.create({
+  /* =========================
+     LEAD
+     ========================= */
+
+  const lead = await prisma.lead.create({
     data: {
-      unitNo: "A-102",
-      status: "AVAILABLE",
-      projectId: project1.id,
+      name: "Ramesh Patel",
+      email: "ramesh@gmail.com",
+      phone: "9123456789",
+      status: "NEW",
+      source: "Website",
+      priority: "High",
+      budget: "₹80L - ₹1Cr",
+      notes: "Interested in 3BHK",
+      projectId: project.id,
+      assignedToId: agent.id,
+      tenantId: TENANT_ID,
     },
   });
 
-  const unit3 = await prisma.unit.create({
+  /* =========================
+     ACTIVITY
+     ========================= */
+
+  await prisma.activity.create({
     data: {
-      unitNo: "B-201",
-      status: "AVAILABLE",
-      projectId: project2.id,
+      leadId: lead.id,
+      type: "call",
+      message: "Initial call done, follow-up scheduled",
+      createdBy: agent.id,
+      tenantId: TENANT_ID,
     },
   });
 
-  console.log("✅ Units seeded");
+  /* =========================
+     BOOKING
+     ========================= */
 
-  // -----------------------------
-  // CUSTOMERS
-  // -----------------------------
-  const customer1 = await prisma.customer.create({
+  const booking = await prisma.booking.create({
     data: {
-      name: "Ravi Patel",
-      email: "ravi@gmail.com",
-      phone: "9999999999",
+      customerId: customer.id,
+      unitId: unit.id,
+      projectId: project.id,
+      agentId: agent.id,
+      managerId: manager.id,
+      totalPrice: 8500000,
+      tokenAmount: 100000,
+      status: "HOLD_REQUESTED",
+      tenantId: TENANT_ID,
     },
   });
 
-  const customer2 = await prisma.customer.create({
+  /* =========================
+     PAYMENT
+     ========================= */
+
+  const payment = await prisma.payment.create({
     data: {
-      name: "Neha Shah",
-      email: "neha@gmail.com",
-      phone: "8888888888",
+      bookingId: booking.id,
+      customerId: customer.id,
+      unitId: unit.id,
+      amount: 100000,
+      status: "Pending",
+      method: "UPI",
+      tenantId: TENANT_ID,
     },
   });
 
-  console.log("✅ Customers seeded");
+  /* =========================
+     PAYMENT REMINDER
+     ========================= */
 
-  // -----------------------------
-  // LEADS
-  // -----------------------------
-  await prisma.lead.create({
+  await prisma.paymentReminder.create({
     data: {
-      name: "Ravi Patel",
-      phone: "9999999999",
-      staffId: agent.id,
-      customerId: customer1.id,
+      paymentId: payment.id,
+      type: "email",
+      message: "Token payment reminder",
+      status: "SCHEDULED",
+      scheduledAt: new Date(Date.now() + 86400000),
+      tenantId: TENANT_ID,
     },
   });
 
-  await prisma.lead.create({
+  /* =========================
+     REVIEW
+     ========================= */
+
+  await prisma.review.create({
     data: {
-      name: "Neha Shah",
-      phone: "8888888888",
-      staffId: agent.id,
-      customerId: customer2.id,
+      type: "property",
+      targetId: project.id,
+      customerId: customer.id,
+      rating: 5,
+      comment: "Great project and smooth process!",
+      status: "approved",
+      tenantId: TENANT_ID,
     },
   });
 
-  console.log("✅ Leads seeded");
-
-  console.log("🎉 Database seeding completed successfully");
+  console.log("✅ Seeding completed successfully");
 }
 
 main()
   .catch((e) => {
-    console.error("❌ Seeding failed:", e);
+    console.error("❌ Seed failed:", e);
     process.exit(1);
   })
   .finally(async () => {

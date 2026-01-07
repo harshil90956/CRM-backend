@@ -16,8 +16,12 @@ type ApiError = {
 };
 
 export type CreatePaymentDto = {
-  bookingId: string;
+  bookingId?: string;
+  customerId: string;
+  unitId: string;
   amount: number;
+  method: string;
+  tenantId: string;
 };
 
 @Injectable()
@@ -32,39 +36,39 @@ export class PaymentsService {
       };
     }
 
-    const booking = await this.prismaService.client.booking.findUnique({
+    const booking = dto.bookingId ? await this.prismaService.client.booking.findUnique({
       where: { id: dto.bookingId },
       select: { id: true, status: true },
-    });
+    }) : null;
 
-    if (!booking) {
+    if (dto.bookingId && !booking) {
       return {
         success: false,
         message: 'Booking not found',
       };
     }
 
-    if (booking.status === ('CANCELLED' as any) || booking.status === ('EXPIRED' as any)) {
+    if (booking && (booking.status === ('CANCELLED' as any) || booking.status === ('REFUNDED' as any))) {
       return {
         success: false,
         message: 'Cannot create payment for cancelled/expired booking',
       };
     }
 
-    const existing = await this.prismaService.client.payment.findFirst({
+    const existing = booking ? await this.prismaService.client.payment.findFirst({
       where: { bookingId: booking.id },
       orderBy: { createdAt: 'desc' as any },
-    });
+    }) : null;
 
     if (existing) {
-      if (existing.status === ('PAID' as any)) {
+      if (existing.status === ('Received' as any)) {
         return {
           success: false,
           message: 'Conflict: booking already has a paid payment',
         };
       }
 
-      if (existing.status === ('PENDING' as any)) {
+      if (existing.status === ('Pending' as any)) {
         if (existing.amount === dto.amount) {
           return {
             success: true,
@@ -83,8 +87,12 @@ export class PaymentsService {
     const payment = await this.prismaService.client.payment.create({
       data: {
         bookingId: dto.bookingId,
+        customerId: dto.customerId,
+        unitId: dto.unitId,
         amount: dto.amount,
+        method: dto.method as any,
         status: 'PENDING' as any,
+        tenantId: dto.tenantId,
       },
     });
 

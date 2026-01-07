@@ -1,2 +1,0 @@
--- AlterTable
-ALTER TABLE `Staff` MODIFY `role` ENUM('SUPER_ADMIN', 'ADMIN', 'MANAGER', 'AGENT') NOT NULL;

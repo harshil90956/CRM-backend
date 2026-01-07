@@ -11,9 +11,16 @@ export class LeadsService {
     const lead = await this.prisma.client.lead.create({
       data: {
         name: createLeadDto.name,
+        email: createLeadDto.email,
         phone: createLeadDto.phone,
-        staffId: createLeadDto.staffId,
-        customerId: createLeadDto.customerId,
+        status: (createLeadDto.status as any) ?? 'NEW',
+        source: (createLeadDto.source as any) ?? 'Website',
+        priority: createLeadDto.priority as any,
+        budget: createLeadDto.budget ?? '',
+        notes: createLeadDto.notes,
+        projectId: createLeadDto.projectId,
+        assignedToId: createLeadDto.assignedToId,
+        tenantId: createLeadDto.tenantId,
       },
     });
 
@@ -28,7 +35,7 @@ export class LeadsService {
     const lead = await this.prisma.client.lead.update({
       where: { id },
       data: {
-        staffId: assignLeadDto.staffId,
+        assignedToId: assignLeadDto.assignedToId,
       },
     });
 

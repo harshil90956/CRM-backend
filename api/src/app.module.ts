@@ -7,9 +7,10 @@ import { HealthModule } from './modules/health/health.module';
 import { BookingsModule } from './modules/bookings/bookings.module';
 import { LeadsModule } from './modules/leads/leads.module';
 import { PaymentsModule } from './modules/payments/payments.module';
+import { StaffModule } from './modules/staff/staff.module';
 
 @Module({
-  imports: [ConfigModule, CoreModule, HealthModule, BookingsModule, LeadsModule, PaymentsModule],
+  imports: [ConfigModule, CoreModule, HealthModule, BookingsModule, LeadsModule, PaymentsModule, StaffModule],
   controllers: [AppController],
   providers: [AppService],
 })

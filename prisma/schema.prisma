@@ -7,97 +7,273 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum StaffRole {
+enum AuthRole {
   SUPER_ADMIN
   ADMIN
   MANAGER
   AGENT
+  CUSTOMER
 }
 
-enum BookingStatus {
-  HOLD_REQUESTED
-  HOLD_APPROVED
-  BOOKED
-  CANCELLED
-  EXPIRED
+enum LeadStatus {
+  NEW
+  CONTACTED
+  FOLLOWUP
+  QUALIFIED
+  NEGOTIATION
+  CONVERTED
+  LOST
+}
+
+enum LeadPriority {
+  High
+  Medium
+  Low
+}
+
+enum LeadSource {
+  Website
+  Facebook
+  Referral
+  Walk_in
+  Google_Ads
+  Instagram
+  LinkedIn
+  Conference
+  Cold_Email
+  Unit_Interest
+}
+
+enum ProjectMainType {
+  Residential
+  Commercial
+  Industrial
+}
+
+enum ProjectStatus {
+  Launching
+  Active
+  Completed
+  On_Hold
+  CLOSED
 }
 
 enum UnitStatus {
   AVAILABLE
-  HELD
+  HOLD
+  BOOKED
   SOLD
 }
 
+enum BookingStatus {
+  HOLD_REQUESTED
+  HOLD_CONFIRMED
+  BOOKING_PENDING_APPROVAL
+  BOOKING_CONFIRMED
+  PAYMENT_PENDING
+  BOOKED
+  CANCELLED
+  REFUNDED
+}
+
 enum PaymentStatus {
-  PENDING
-  PAID
-  FAILED
+  Pending
+  Received
+  Overdue
+  Refunded
 }
 
-model Staff {
-  id       String    @id @default(uuid())
+enum PaymentMethod {
+  Bank_Transfer
+  Cash
+  Cheque
+  Online
+  UPI
+  RTGS
+  Card
+  Net_Banking
+}
+
+enum ReviewStatus {
+  pending
+  approved
+  rejected
+}
+
+enum ReviewType {
+  property
+  agent
+}
+
+enum ReminderType {
+  email
+  sms
+  whatsapp
+}
+
+enum ReminderStatus {
+  SENT
+  SCHEDULED
+}
+
+enum ActivityType {
+  call
+  email
+  meeting
+  note
+}
+
+model User {
+  id       String   @id @default(uuid())
   name     String
-  email    String    @unique
-  password String
-  role     StaffRole
-  isActive Boolean   @default(true)
+  email    String   @unique
+  phone    String?
+  role     AuthRole
+  isActive Boolean  @default(true)
 
-  leads   Lead[]
-  reviews Review[]
+  managerId String?
+  manager   User?   @relation("UserManager", fields: [managerId], references: [id])
+  agents    User[]  @relation("UserManager")
+
+  tenantId String
+  avatar   String?
+
+  /**
+   * ---------- LEADS ----------
+   */
+  assignedLeads Lead[] @relation("LeadAssignedTo")
+
+  /**
+   * ---------- ACTIVITIES ----------
+   */
+  activities Activity[] @relation("ActivityCreatedBy")
+
+  /**
+   * ---------- BOOKINGS ----------
+   */
+  customerBookings Booking[] @relation("BookingCustomer")
+  agentBookings    Booking[] @relation("BookingAgent")
+  managerBookings  Booking[] @relation("BookingManager")
+
+  /**
+   * ---------- PAYMENTS (FIX 1) ----------
+   */
+  customerPayments Payment[] @relation("PaymentCustomer")
+
+  /**
+   * ---------- REVIEWS (FIX 2) ----------
+   */
+  customerReviews Review[] @relation("ReviewCustomer")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
-model Customer {
-  id    String @id @default(uuid())
-  name  String
-  email String @unique
-  phone String
+model Lead {
+  id     String     @id @default(uuid())
+  name   String
+  email  String
+  phone  String
+  status LeadStatus
+  source LeadSource
 
-  bookings Booking[]
-  leads    Lead[]
-  reviews  Review[]
+  priority LeadPriority?
+  budget   String
+  notes    String?
+
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id])
+
+  assignedToId String?
+  assignedTo   User?   @relation("LeadAssignedTo", fields: [assignedToId], references: [id])
+
+  tenantId String
+
+  activities Activity[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@map("leads")
+}
+
+model Activity {
+  id     String @id @default(uuid())
+  leadId String
+  lead   Lead   @relation(fields: [leadId], references: [id])
+
+  type    ActivityType
+  message String
+
+  createdBy String
+  creator   User   @relation("ActivityCreatedBy", fields: [createdBy], references: [id])
+
+  tenantId  String
+  createdAt DateTime @default(now())
 }
 
 model Project {
-  id       String @id @default(uuid())
-  name     String
-  location String
+  id          String          @id @default(uuid())
+  name        String
+  location    String
+  mainType    ProjectMainType
+  priceRange  String
+  status      ProjectStatus
+  isClosed    Boolean         @default(false)
+  description String?
+  tenantId    String
 
-  units   Unit[]
-  reviews Review[]
+  units Unit[]
+  leads Lead[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  bookings  Booking[]
 }
 
 model Unit {
-  id     String     @id @default(uuid())
-  unitNo String
-  status UnitStatus @default(AVAILABLE)
-
+  id        String     @id @default(uuid())
+  unitNo    String
   projectId String
-  project   Project @relation(fields: [projectId], references: [id])
+  project   Project    @relation(fields: [projectId], references: [id])
+  status    UnitStatus
+  price     Float
+
+  bedrooms    Int?
+  bathrooms   Int?
+  floorNumber Int?
+  towerName   String?
+
+  tenantId String
 
   bookings Booking[]
+  payments Payment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
 model Booking {
-  id     String        @id @default(uuid())
-  status BookingStatus
-
+  id         String @id @default(uuid())
   customerId String
-  customer   Customer @relation(fields: [customerId], references: [id])
+  customer   User   @relation("BookingCustomer", fields: [customerId], references: [id])
 
   unitId String
   unit   Unit   @relation(fields: [unitId], references: [id])
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id])
+
+  agentId String?
+  agent   User?   @relation("BookingAgent", fields: [agentId], references: [id])
+
+  managerId String?
+  manager   User?   @relation("BookingManager", fields: [managerId], references: [id])
+
+  totalPrice  Float
+  tokenAmount Float
+  status      BookingStatus
+
+  tenantId String
 
   payments Payment[]
 
@@ -106,58 +282,57 @@ model Booking {
 }
 
 model Payment {
-  id     String        @id @default(uuid())
+  id String @id @default(uuid())
+
+  bookingId String?
+  booking   Booking? @relation(fields: [bookingId], references: [id])
+
+  customerId String
+  customer   User   @relation("PaymentCustomer", fields: [customerId], references: [id])
+
+  unitId String
+  unit   Unit   @relation(fields: [unitId], references: [id])
+
   amount Float
   status PaymentStatus
+  method PaymentMethod
 
-  bookingId String
-  booking   Booking @relation(fields: [bookingId], references: [id])
+  tenantId String
 
   reminders PaymentReminder[]
 
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
 }
 
 model PaymentReminder {
-  id   String  @id @default(uuid())
-  sent Boolean @default(false)
-
+  id        String  @id @default(uuid())
   paymentId String
   payment   Payment @relation(fields: [paymentId], references: [id])
 
+  type    ReminderType
+  message String
+  status  ReminderStatus
+
+  scheduledAt DateTime
+  sentAt      DateTime?
+
+  tenantId String
+
   createdAt DateTime @default(now())
 }
 
-model Lead {
-  id         String   @id @default(uuid())
-  name       String
-  phone      String
-
-  staffId    String
-  staff      Staff    @relation(fields: [staffId], references: [id])
-
-  customerId String?
-  customer   Customer? @relation(fields: [customerId], references: [id])
-
-  createdAt  DateTime @default(now())
-
-  @@map("leads")
-}
 model Review {
-  id      String @id @default(uuid())
-  rating  Int
-  comment String
+  id       String     @id @default(uuid())
+  type     ReviewType
+  targetId String
 
   customerId String
-  customer   Customer @relation(fields: [customerId], references: [id])
+  customer   User   @relation("ReviewCustomer", fields: [customerId], references: [id])
 
-  projectId String?
-  project   Project? @relation(fields: [projectId], references: [id])
+  rating  Int
+  comment String
+  status  ReviewStatus
 
-  staffId String?
-  staff   Staff?  @relation(fields: [staffId], references: [id])
-
+  tenantId  String
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
 }

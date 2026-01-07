@@ -1,3 +1,3 @@
 export class AssignLeadDto {
-  staffId: string;
+  assignedToId: string;
 }
