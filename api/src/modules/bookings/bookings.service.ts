@@ -4,6 +4,9 @@ import { Injectable } from '@nestjs/common';
 
 import { PrismaService } from '../../core/database/prisma/prisma.service';
 
+import { CreateBookingDto } from './dto/create-booking.dto';
+import { UpdateBookingStatusDto } from './dto/update-booking-status.dto';
+
 type ApiSuccess<T> = {
   success: true;
   data: T;
@@ -15,20 +18,57 @@ type ApiError = {
   message: string;
 };
 
-export type CreateBookingDto = {
-  unitId: string;
-  customerId: string;
-};
-
-export type UpdateBookingStatusDto = {
-  status: 'HOLD' | 'BOOKED' | 'CANCELLED';
-};
-
 @Injectable()
 export class BookingsService {
   constructor(private readonly prismaService: PrismaService) {}
 
-  async create(dto: CreateBookingDto): Promise<ApiSuccess<unknown>> {
+  private mapRequestedStatus(status: UpdateBookingStatusDto['status']): string {
+    return status === 'HOLD' ? 'HOLD_REQUESTED' : status;
+  }
+
+  private canTransition(current: unknown, next: unknown): boolean {
+    if (current === next) {
+      return true;
+    }
+
+    if (current === 'HOLD_REQUESTED') {
+      return next === 'BOOKED' || next === 'CANCELLED';
+    }
+
+    if (current === 'HOLD_APPROVED') {
+      return next === 'BOOKED' || next === 'CANCELLED';
+    }
+
+    if (current === 'BOOKED') {
+      return next === 'CANCELLED';
+    }
+
+    return false;
+  }
+
+  async create(dto: CreateBookingDto): Promise<ApiSuccess<unknown> | ApiError> {
+    const existingForUnit = await this.prismaService.client.booking.findFirst({
+      where: {
+        unitId: dto.unitId,
+        status: { in: ['HOLD_REQUESTED', 'HOLD_APPROVED', 'BOOKED'] as any },
+      },
+    });
+
+    if (existingForUnit) {
+      if (existingForUnit.customerId === dto.customerId) {
+        return {
+          success: true,
+          data: existingForUnit,
+          message: 'Booking already exists for this unit and customer',
+        };
+      }
+
+      return {
+        success: false,
+        message: 'Conflict: unit already has an active booking',
+      };
+    }
+
     const booking = await this.prismaService.client.booking.create({
       data: {
         unitId: dto.unitId,
@@ -74,7 +114,7 @@ export class BookingsService {
   }
 
   async updateStatus(id: string, dto: UpdateBookingStatusDto): Promise<ApiSuccess<unknown> | ApiError> {
-    const mappedStatus = dto.status === 'HOLD' ? 'HOLD_REQUESTED' : dto.status;
+    const mappedStatus = this.mapRequestedStatus(dto.status);
 
     const existing = await this.prismaService.client.booking.findUnique({
       where: { id },
@@ -85,6 +125,38 @@ export class BookingsService {
         success: false,
         message: 'Booking not found',
       };
+    }
+
+    if (!this.canTransition(existing.status, mappedStatus)) {
+      return {
+        success: false,
+        message: `Invalid state transition from ${existing.status} to ${mappedStatus}`,
+      };
+    }
+
+    if (existing.status === mappedStatus) {
+      return {
+        success: true,
+        data: existing,
+        message: 'Booking status already set',
+      };
+    }
+
+    if (mappedStatus === 'BOOKED') {
+      const conflicting = await this.prismaService.client.booking.findFirst({
+        where: {
+          unitId: existing.unitId,
+          id: { not: existing.id },
+          status: { in: ['HOLD_REQUESTED', 'HOLD_APPROVED', 'BOOKED'] as any },
+        },
+      });
+
+      if (conflicting) {
+        return {
+          success: false,
+          message: 'Conflict: unit already has an active booking',
+        };
+      }
     }
 
     const updated = await this.prismaService.client.booking.update({
