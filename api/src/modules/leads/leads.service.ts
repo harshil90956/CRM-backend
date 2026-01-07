@@ -8,7 +8,7 @@ export class LeadsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(createLeadDto: CreateLeadDto) {
-    const lead = await this.prisma.client.leads.create({
+    const lead = await this.prisma.client.lead.create({
       data: {
         name: createLeadDto.name,
         phone: createLeadDto.phone,
@@ -25,7 +25,7 @@ export class LeadsService {
   }
 
   async assignLead(id: string, assignLeadDto: AssignLeadDto) {
-    const lead = await this.prisma.client.leads.update({
+    const lead = await this.prisma.client.lead.update({
       where: { id },
       data: {
         staffId: assignLeadDto.staffId,
@@ -40,7 +40,7 @@ export class LeadsService {
   }
 
   async findAll() {
-    const leads = await this.prisma.client.leads.findMany();
+    const leads = await this.prisma.client.lead.findMany();
 
     return {
       success: true,

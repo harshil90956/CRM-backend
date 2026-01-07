@@ -130,19 +130,20 @@ model PaymentReminder {
 }
 
 model Lead {
-  id    String @id @default(uuid())
-  name  String
-  phone String
+  id         String   @id @default(uuid())
+  name       String
+  phone      String
 
-  staffId String
-  staff   Staff  @relation(fields: [staffId], references: [id])
+  staffId    String
+  staff      Staff    @relation(fields: [staffId], references: [id])
 
   customerId String?
   customer   Customer? @relation(fields: [customerId], references: [id])
 
-  createdAt DateTime @default(now())
-}
+  createdAt  DateTime @default(now())
 
+  @@map("leads")
+}
 model Review {
   id      String @id @default(uuid())
   rating  Int
