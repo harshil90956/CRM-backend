@@ -1,1 +1,11 @@
-// TODO: Implemented in Phase 7+ after domain blueprint approval
+import { Module } from '@nestjs/common';
+import { LeadsController } from './leads.controller';
+import { LeadsService } from './leads.service';
+import { PrismaModule } from '../../core/database/prisma/prisma.module';
+
+@Module({
+  imports: [PrismaModule],
+  controllers: [LeadsController],
+  providers: [LeadsService],
+})
+export class LeadsModule {}
