@@ -4,14 +4,11 @@
   - You are about to drop the `Lead` table. If the table is not empty, all the data it contains will be lost.
 
 */
--- DropForeignKey
-ALTER TABLE `Lead` DROP FOREIGN KEY `Lead_customerId_fkey`;
-
--- DropForeignKey
-ALTER TABLE `Lead` DROP FOREIGN KEY `Lead_staffId_fkey`;
+-- DropTable
+DROP TABLE IF EXISTS `Lead`;
 
 -- DropTable
-DROP TABLE `Lead`;
+DROP TABLE IF EXISTS `leads`;
 
 -- CreateTable
 CREATE TABLE `leads` (
