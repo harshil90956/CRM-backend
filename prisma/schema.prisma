@@ -284,6 +284,21 @@ model Booking {
 
   tenantId String
 
+  customerName  String?
+  customerEmail String?
+  customerPhone String?
+
+  notes String?
+
+  holdExpiresAt DateTime?
+
+  approvedAt  DateTime?
+  rejectedAt  DateTime?
+  cancelledAt DateTime?
+
+  managerNotes       String?
+  cancellationReason String?
+
   payments Payment[]
 
   createdAt DateTime @default(now())
@@ -307,6 +322,12 @@ model Payment {
   method PaymentMethod
 
   tenantId String
+
+  paymentType String? // Token / Booking / Installment
+  receiptNo   String?
+  notes       String?
+  paidAt      DateTime?
+  refundRefId String?
 
   reminders PaymentReminder[]
 
