@@ -4,6 +4,8 @@ import { Injectable } from '@nestjs/common';
 
 import { PrismaService } from '../../core/database/prisma/prisma.service';
 
+import { CreatePaymentDto } from './dto/create-payment.dto';
+
 type ApiSuccess<T> = {
   success: true;
   data: T;
@@ -13,15 +15,6 @@ type ApiSuccess<T> = {
 type ApiError = {
   success: false;
   message: string;
-};
-
-export type CreatePaymentDto = {
-  bookingId?: string;
-  customerId: string;
-  unitId: string;
-  amount: number;
-  method: string;
-  tenantId: string;
 };
 
 @Injectable()
@@ -36,52 +29,16 @@ export class PaymentsService {
       };
     }
 
-    const booking = dto.bookingId ? await this.prismaService.client.booking.findUnique({
+    const booking = await this.prismaService.client.booking.findUnique({
       where: { id: dto.bookingId },
-      select: { id: true, status: true },
-    }) : null;
+      select: { id: true },
+    });
 
-    if (dto.bookingId && !booking) {
+    if (!booking) {
       return {
         success: false,
         message: 'Booking not found',
       };
-    }
-
-    if (booking && (booking.status === ('CANCELLED' as any) || booking.status === ('REFUNDED' as any))) {
-      return {
-        success: false,
-        message: 'Cannot create payment for cancelled/expired booking',
-      };
-    }
-
-    const existing = booking ? await this.prismaService.client.payment.findFirst({
-      where: { bookingId: booking.id },
-      orderBy: { createdAt: 'desc' as any },
-    }) : null;
-
-    if (existing) {
-      if (existing.status === ('Received' as any)) {
-        return {
-          success: false,
-          message: 'Conflict: booking already has a paid payment',
-        };
-      }
-
-      if (existing.status === ('Pending' as any)) {
-        if (existing.amount === dto.amount) {
-          return {
-            success: true,
-            data: existing,
-            message: 'Payment already pending for this booking',
-          };
-        }
-
-        return {
-          success: false,
-          message: 'Conflict: payment already pending for this booking',
-        };
-      }
     }
 
     const payment = await this.prismaService.client.payment.create({
@@ -89,10 +46,15 @@ export class PaymentsService {
         bookingId: dto.bookingId,
         customerId: dto.customerId,
         unitId: dto.unitId,
-        amount: dto.amount,
-        method: dto.method as any,
-        status: 'PENDING' as any,
         tenantId: dto.tenantId,
+        amount: dto.amount,
+        status: dto.status as any,
+        method: dto.method as any,
+        paidAt: dto.paymentDate ? new Date(dto.paymentDate) : undefined,
+        notes: dto.notes,
+        paymentType: dto.type,
+        receiptNo: dto.receiptNo,
+        refundRefId: dto.refundRefId,
       },
     });
 
@@ -104,11 +66,23 @@ export class PaymentsService {
   }
 
   async findAll(): Promise<ApiSuccess<unknown[]>> {
-    const payments = await this.prismaService.client.payment.findMany();
+    const payments = await (this.prismaService.client.payment as any).findMany({
+      include: {
+        unit: { select: { unitNo: true } },
+        customer: { select: { name: true } },
+      },
+    });
 
     return {
       success: true,
-      data: payments,
+      data: payments.map((p: any) => ({
+        ...p,
+        updatedAt: p.updatedAt ?? p.createdAt,
+        paymentDate: p.paidAt ?? null,
+        type: p.paymentType ?? null,
+        unitNo: p?.unit?.unitNo,
+        customerName: p?.customer?.name,
+      })),
       message: 'Payments fetched successfully',
     };
   }

@@ -2,7 +2,8 @@
 
 import { Body, Controller, Get, Post } from '@nestjs/common';
 
-import { CreatePaymentDto, PaymentsService } from './payments.service';
+import { CreatePaymentDto } from './dto/create-payment.dto';
+import { PaymentsService } from './payments.service';
 
 @Controller('payments')
 export class PaymentsController {
@@ -15,14 +16,53 @@ export class PaymentsController {
     );
   }
 
+  private isIsoDate(value: unknown): value is string {
+    if (typeof value !== 'string' || !value.trim()) return false;
+    const d = new Date(value);
+    return !Number.isNaN(d.getTime());
+  }
+
   @Post()
   create(@Body() body: CreatePaymentDto) {
     if (!this.isUuid(body?.bookingId)) {
       return { success: false, message: 'Invalid bookingId' };
     }
 
+    if (!this.isUuid(body?.customerId)) {
+      return { success: false, message: 'Invalid customerId' };
+    }
+
+    if (!this.isUuid(body?.unitId)) {
+      return { success: false, message: 'Invalid unitId' };
+    }
+
+    if (typeof body?.tenantId !== 'string' || !body.tenantId.trim()) {
+      return { success: false, message: 'Invalid tenantId' };
+    }
+
     if (typeof body?.amount !== 'number' || Number.isNaN(body.amount) || body.amount <= 0) {
       return { success: false, message: 'Invalid amount' };
+    }
+
+    if (body?.status !== 'Pending' && body?.status !== 'Received' && body?.status !== 'Overdue' && body?.status !== 'Refunded') {
+      return { success: false, message: 'Invalid status' };
+    }
+
+    if (
+      body?.method !== 'Bank_Transfer' &&
+      body?.method !== 'Cash' &&
+      body?.method !== 'Cheque' &&
+      body?.method !== 'Online' &&
+      body?.method !== 'UPI' &&
+      body?.method !== 'RTGS' &&
+      body?.method !== 'Card' &&
+      body?.method !== 'Net_Banking'
+    ) {
+      return { success: false, message: 'Invalid method' };
+    }
+
+    if (body?.paymentDate && !this.isIsoDate(body.paymentDate)) {
+      return { success: false, message: 'Invalid paymentDate' };
     }
 
     return this.paymentsService.create(body);

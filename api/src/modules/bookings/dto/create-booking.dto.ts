@@ -2,9 +2,15 @@ export class CreateBookingDto {
   unitId: string;
   customerId: string;
   projectId: string;
-  agentId?: string;
-  managerId?: string;
+  tenantId: string;
+
   totalPrice: number;
   tokenAmount: number;
-  tenantId: string;
+
+  customerName?: string;
+  customerEmail?: string;
+  customerPhone?: string;
+  notes?: string;
+  agentId?: string;
+  managerId?: string;
 }
