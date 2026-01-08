@@ -24,6 +24,37 @@ export class LeadsService {
     createdAt: true,
   } as const;
 
+  private readonly leadSelectNoEmail = {
+    id: true,
+    name: true,
+    phone: true,
+    status: true,
+    source: true,
+    priority: true,
+    budget: true,
+    notes: true,
+    projectId: true,
+    assignedToId: true,
+    tenantId: true,
+    createdAt: true,
+  } as const;
+  
+
+  private isMissingLeadEmailColumn(e: unknown): boolean {
+    const err = e as any;
+    if (err?.code !== 'P2022') return false;
+
+    const column = typeof err?.meta?.column === 'string' ? (err.meta.column as string) : '';
+    const modelName = typeof err?.meta?.modelName === 'string' ? (err.meta.modelName as string) : '';
+
+    const normalized = column.toLowerCase();
+
+    if (modelName === 'Lead' && normalized.includes('email')) return true;
+    if (normalized.endsWith('.email') && (normalized.includes('lead') || normalized.includes('leads'))) return true;
+
+    return false;
+  }
+
   private requireDefined(value: unknown, fieldName: string) {
     if (value === undefined || value === null) {
       throw new BadRequestException(`${fieldName} is required`);
@@ -82,28 +113,34 @@ export class LeadsService {
       await this.assertUserExists(createLeadDto.assignedToId, 'assignedToId');
     }
 
-    const lead = await this.prisma.client.lead.create({
-      data: {
-        name: createLeadDto.name,
-        email: createLeadDto.email,
-        phone: createLeadDto.phone,
-        status: createLeadDto.status,
-        source: createLeadDto.source,
-        priority: createLeadDto.priority ?? undefined,
-        budget: createLeadDto.budget,
-        notes: createLeadDto.notes,
-        projectId: createLeadDto.projectId,
-        assignedToId: createLeadDto.assignedToId,
-        tenantId: createLeadDto.tenantId,
-      },
-      select: this.leadSelect,
-    });
-
-    return {
-      success: true,
-      data: lead,
-      message: 'Lead created successfully',
-    };
+    try {
+      const lead = await this.prisma.client.lead.create({
+        data: {
+          name: createLeadDto.name,
+          email: createLeadDto.email,
+          phone: createLeadDto.phone,
+          status: createLeadDto.status,
+          source: createLeadDto.source,
+          priority: createLeadDto.priority ?? undefined,
+          budget: createLeadDto.budget,
+          notes: createLeadDto.notes,
+          projectId: createLeadDto.projectId,
+          assignedToId: createLeadDto.assignedToId,
+          tenantId: createLeadDto.tenantId,
+        },
+        select: this.leadSelect,
+      });
+      return {
+        success: true,
+        data: lead,
+        message: 'Lead created successfully',
+      };
+    } catch (e) {
+      if (this.isMissingLeadEmailColumn(e)) {
+        throw new BadRequestException('Database schema is out of date (missing leads.email). Run prisma db push to sync.');
+      }
+      throw e;
+    }
   }
 
   async assignLead(id: string, assignLeadDto: AssignLeadDto) {
@@ -115,13 +152,29 @@ export class LeadsService {
       throw new NotFoundException('Lead not found');
     }
 
-    const lead = await this.prisma.client.lead.update({
-      where: { id },
-      data: {
-        assignedToId: assignLeadDto.assignedToId,
-      },
-      select: this.leadSelect,
-    });
+    let lead: any;
+
+    try {
+      lead = await this.prisma.client.lead.update({
+        where: { id },
+        data: {
+          assignedToId: assignLeadDto.assignedToId,
+        },
+        select: this.leadSelect,
+      });
+    } catch (e) {
+      const err = e as any;
+      if (err?.code !== 'P2022' && !this.isMissingLeadEmailColumn(e)) {
+        throw e;
+      }
+      lead = await this.prisma.client.lead.update({
+        where: { id },
+        data: {
+          assignedToId: assignLeadDto.assignedToId,
+        },
+        select: this.leadSelectNoEmail,
+      });
+    }
 
     return {
       success: true,
@@ -131,9 +184,20 @@ export class LeadsService {
   }
 
   async findAll() {
-    const leads = await this.prisma.client.lead.findMany({
-      select: this.leadSelect,
-    });
+    let leads: any[];
+    try {
+      leads = await this.prisma.client.lead.findMany({
+        select: this.leadSelect,
+      });
+    } catch (e) {
+      const err = e as any;
+      if (err?.code !== 'P2022' && !this.isMissingLeadEmailColumn(e)) {
+        throw e;
+      }
+      leads = await this.prisma.client.lead.findMany({
+        select: this.leadSelectNoEmail,
+      });
+    }
 
     return {
       success: true,
@@ -143,10 +207,22 @@ export class LeadsService {
   }
 
   async findOne(id: string) {
-    const lead = await this.prisma.client.lead.findUnique({
-      where: { id },
-      select: this.leadSelect,
-    });
+    let lead: any;
+    try {
+      lead = await this.prisma.client.lead.findUnique({
+        where: { id },
+        select: this.leadSelect,
+      });
+    } catch (e) {
+      const err = e as any;
+      if (err?.code !== 'P2022' && !this.isMissingLeadEmailColumn(e)) {
+        throw e;
+      }
+      lead = await this.prisma.client.lead.findUnique({
+        where: { id },
+        select: this.leadSelectNoEmail,
+      });
+    }
 
     if (!lead) {
       throw new NotFoundException('Lead not found');
