@@ -21,4 +21,9 @@ export class LeadsController {
   async findAll() {
     return this.leadsService.findAll();
   }
+
+  @Get(':id')
+  async findOne(@Param('id') id: string) {
+    return this.leadsService.findOne(id);
+  }
 }
