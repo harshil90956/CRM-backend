@@ -8,6 +8,10 @@ describe('AppController (e2e)', () => {
   let app: INestApplication<App>;
 
   beforeEach(async () => {
+    process.env.JWT_SECRET ||= 'test_jwt_secret';
+    process.env.AUTH_DEFAULT_TENANT_ID ||= 'tenant_default';
+    process.env.AUTH_DEFAULT_NEW_USER_ROLE ||= 'CUSTOMER';
+
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();

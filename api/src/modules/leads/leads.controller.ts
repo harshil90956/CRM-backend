@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Patch, Post, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { LeadsService } from './leads.service';
 import { CreateLeadDto } from './dto/create-lead.dto';
 import { AssignLeadDto } from './dto/assign-lead.dto';
@@ -20,5 +21,19 @@ export class LeadsController {
   @Get()
   async findAll() {
     return this.leadsService.findAll();
+  }
+
+  @Get(':id')
+  async findOne(@Param('id') id: string) {
+    return this.leadsService.findOne(id);
+  }
+
+  @Post('import')
+  @UseInterceptors(FileInterceptor('file'))
+  async importCsv(@UploadedFile() file: { buffer?: Buffer } | undefined) {
+    if (!file?.buffer) {
+      throw new BadRequestException('CSV file is required');
+    }
+    return this.leadsService.importCsv(file.buffer);
   }
 }

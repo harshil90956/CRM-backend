@@ -156,17 +156,19 @@ model User {
   managerBookings  Booking[] @relation("BookingManager")
 
   /**
-   * ---------- PAYMENTS (FIX 1) ----------
+   * ---------- PAYMENTS ----------
    */
   customerPayments Payment[] @relation("PaymentCustomer")
 
   /**
-   * ---------- REVIEWS (FIX 2) ----------
+   * ---------- REVIEWS ----------
    */
   customerReviews Review[] @relation("ReviewCustomer")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@map("staff")
 }
 
 model Lead {
@@ -212,16 +214,25 @@ model Activity {
   createdAt DateTime @default(now())
 }
 
+model EmailOtp {
+  id        String   @id @default(uuid())
+  email     String
+  code      String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
 model Project {
   id          String          @id @default(uuid())
   name        String
   location    String
-  mainType    ProjectMainType
-  priceRange  String
-  status      ProjectStatus
+  mainType    ProjectMainType @default(Residential)
+  priceRange  String          @default("")
+  status      ProjectStatus   @default(Active)
   isClosed    Boolean         @default(false)
   description String?
-  tenantId    String
+  tenantId    String          @default("tenant_default")
 
   units Unit[]
   leads Lead[]
@@ -275,6 +286,21 @@ model Booking {
 
   tenantId String
 
+  customerName  String?
+  customerEmail String?
+  customerPhone String?
+
+  notes String?
+
+  holdExpiresAt DateTime?
+
+  approvedAt  DateTime?
+  rejectedAt  DateTime?
+  cancelledAt DateTime?
+
+  managerNotes       String?
+  cancellationReason String?
+
   payments Payment[]
 
   createdAt DateTime @default(now())
@@ -298,6 +324,12 @@ model Payment {
   method PaymentMethod
 
   tenantId String
+
+  paymentType String? // Token / Booking / Installment
+  receiptNo   String?
+  notes       String?
+  paidAt      DateTime?
+  refundRefId String?
 
   reminders PaymentReminder[]
 

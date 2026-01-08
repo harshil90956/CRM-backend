@@ -3,37 +3,55 @@ import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log("🌱 Seeding database (Phase 8A clean seed)...");
+  console.log("🌱 Seeding database (SCHEMA-ACCURATE)");
 
   const TENANT_ID = "tenant_default";
 
   /* =========================
-     USERS (ADMIN / MANAGER / AGENT / CUSTOMER)
+     USERS (SUPER_ADMIN / ADMIN / MANAGER / AGENT / CUSTOMER)
      ========================= */
 
-  const superAdmin = await prisma.user.create({
-    data: {
-      name: "Super Admin",
-      email: "superadmin@crm.com",
+  const superAdmin = await prisma.user.upsert({
+    where: { email: "priyansidholariya@gmail.com" },
+    create: {
+      name: "Harshil Dobariya",
+      email: "priyansidholariya@gmail.com",
       phone: "9999999999",
       role: "SUPER_ADMIN",
       tenantId: TENANT_ID,
     },
+    update: {},
   });
 
-  const manager = await prisma.user.create({
-    data: {
-      name: "Sales Manager",
-      email: "manager@crm.com",
+  const admin = await prisma.user.upsert({
+    where: { email: "devanshee.chodvadiya@gmail.com" },
+    create: {
+      name: "Devanshee Chodvadiya",
+      email: "devanshee.chodvadiya@gmail.com",
+      phone: "9000000000",
+      role: "ADMIN",
+      tenantId: TENANT_ID,
+      managerId: superAdmin.id,
+    },
+    update: {},
+  });
+
+  const manager = await prisma.user.upsert({
+    where: { email: "priyagogdani88@gmail.com" },
+    create: {
+      name: "Priya Gogdani",
+      email: "priyagogdani88@gmail.com",
       phone: "8888888888",
       role: "MANAGER",
       tenantId: TENANT_ID,
       managerId: superAdmin.id,
     },
+    update: {},
   });
 
-  const agent = await prisma.user.create({
-    data: {
+  const agent = await prisma.user.upsert({
+    where: { email: "agent@crm.com" },
+    create: {
       name: "Sales Agent",
       email: "agent@crm.com",
       phone: "7777777777",
@@ -41,16 +59,35 @@ async function main() {
       tenantId: TENANT_ID,
       managerId: manager.id,
     },
+    update: {},
   });
 
-  const customer = await prisma.user.create({
-    data: {
+  const customer = await prisma.user.upsert({
+    where: { email: "customer@crm.com" },
+    create: {
       name: "Customer One",
       email: "customer@crm.com",
       phone: "6666666666",
       role: "CUSTOMER",
       tenantId: TENANT_ID,
     },
+    update: {},
+  });
+
+  /* =========================
+     EMAIL OTP
+     ========================= */
+
+  await prisma.emailOtp.createMany({
+    data: [
+      {
+        email: superAdmin.email,
+        code: "123456",
+        expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+        used: false,
+      },
+    ],
+    skipDuplicates: true,
   });
 
   /* =========================
@@ -113,7 +150,7 @@ async function main() {
     data: {
       leadId: lead.id,
       type: "call",
-      message: "Initial call done, follow-up scheduled",
+      message: "Initial call done with customer",
       createdBy: agent.id,
       tenantId: TENANT_ID,
     },
