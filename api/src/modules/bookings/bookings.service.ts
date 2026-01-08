@@ -22,64 +22,22 @@ type ApiError = {
 export class BookingsService {
   constructor(private readonly prismaService: PrismaService) {}
 
-  private mapRequestedStatus(status: UpdateBookingStatusDto['status']): string {
-    return status === 'HOLD' ? 'HOLD_REQUESTED' : status;
-  }
-
-  private canTransition(current: unknown, next: unknown): boolean {
-    if (current === next) {
-      return true;
-    }
-
-    if (current === 'HOLD_REQUESTED') {
-      return next === 'BOOKED' || next === 'CANCELLED';
-    }
-
-    if (current === 'HOLD_APPROVED') {
-      return next === 'BOOKED' || next === 'CANCELLED';
-    }
-
-    if (current === 'BOOKED') {
-      return next === 'CANCELLED';
-    }
-
-    return false;
-  }
-
   async create(dto: CreateBookingDto): Promise<ApiSuccess<unknown> | ApiError> {
-    const existingForUnit = await this.prismaService.client.booking.findFirst({
-      where: {
-        unitId: dto.unitId,
-        status: { in: ['HOLD_REQUESTED', 'HOLD_APPROVED', 'BOOKED'] as any },
-      },
-    });
-
-    if (existingForUnit) {
-      if (existingForUnit.customerId === dto.customerId) {
-        return {
-          success: true,
-          data: existingForUnit,
-          message: 'Booking already exists for this unit and customer',
-        };
-      }
-
-      return {
-        success: false,
-        message: 'Conflict: unit already has an active booking',
-      };
-    }
-
-    const booking = await this.prismaService.client.booking.create({
+    const booking = await (this.prismaService.client.booking as any).create({
       data: {
         unitId: dto.unitId,
         customerId: dto.customerId,
-        projectId: dto.projectId,
         agentId: dto.agentId,
         managerId: dto.managerId,
+        projectId: dto.projectId,
         totalPrice: dto.totalPrice,
         tokenAmount: dto.tokenAmount,
         status: 'HOLD_REQUESTED',
         tenantId: dto.tenantId,
+        customerName: dto.customerName,
+        customerEmail: dto.customerEmail,
+        customerPhone: dto.customerPhone,
+        notes: dto.notes,
       },
     });
 
@@ -91,8 +49,14 @@ export class BookingsService {
   }
 
   async findById(id: string): Promise<ApiSuccess<unknown> | ApiError> {
-    const booking = await this.prismaService.client.booking.findUnique({
+    const booking = await (this.prismaService.client.booking as any).findUnique({
       where: { id },
+      include: {
+        unit: { select: { unitNo: true, project: { select: { name: true } } } },
+        customer: { select: { name: true, email: true, phone: true } },
+        agent: { select: { name: true } },
+        manager: { select: { name: true } },
+      },
     });
 
     if (!booking) {
@@ -104,24 +68,47 @@ export class BookingsService {
 
     return {
       success: true,
-      data: booking,
+      data: {
+        ...booking,
+        unitNo: booking?.unit?.unitNo,
+        projectName: booking?.unit?.project?.name,
+        customerName: booking?.customerName ?? booking?.customer?.name,
+        customerEmail: booking?.customerEmail ?? booking?.customer?.email,
+        customerPhone: booking?.customerPhone ?? booking?.customer?.phone,
+        agentName: booking?.agent?.name,
+        managerName: booking?.manager?.name,
+      },
       message: 'Booking fetched successfully',
     };
   }
 
   async findAll(): Promise<ApiSuccess<unknown[]>> {
-    const bookings = await this.prismaService.client.booking.findMany();
+    const bookings = await (this.prismaService.client.booking as any).findMany({
+      include: {
+        unit: { select: { unitNo: true, project: { select: { name: true } } } },
+        customer: { select: { name: true, email: true, phone: true } },
+        agent: { select: { name: true } },
+        manager: { select: { name: true } },
+      },
+    });
 
     return {
       success: true,
-      data: bookings,
+      data: bookings.map((b: any) => ({
+        ...b,
+        unitNo: b?.unit?.unitNo,
+        projectName: b?.unit?.project?.name,
+        customerName: b?.customerName ?? b?.customer?.name,
+        customerEmail: b?.customerEmail ?? b?.customer?.email,
+        customerPhone: b?.customerPhone ?? b?.customer?.phone,
+        agentName: b?.agent?.name,
+        managerName: b?.manager?.name,
+      })),
       message: 'Bookings fetched successfully',
     };
   }
 
   async updateStatus(id: string, dto: UpdateBookingStatusDto): Promise<ApiSuccess<unknown> | ApiError> {
-    const mappedStatus = this.mapRequestedStatus(dto.status);
-
     const existing = await this.prismaService.client.booking.findUnique({
       where: { id },
     });
@@ -133,41 +120,19 @@ export class BookingsService {
       };
     }
 
-    if (!this.canTransition(existing.status, mappedStatus)) {
-      return {
-        success: false,
-        message: `Invalid state transition from ${existing.status} to ${mappedStatus}`,
-      };
-    }
+    const data: Record<string, unknown> = {
+      status: dto.status as any,
+    };
 
-    if (existing.status === mappedStatus) {
-      return {
-        success: true,
-        data: existing,
-        message: 'Booking status already set',
-      };
-    }
+    if (dto.approvedAt) data.approvedAt = new Date(dto.approvedAt);
+    if (dto.rejectedAt) data.rejectedAt = new Date(dto.rejectedAt);
+    if (dto.cancelledAt) data.cancelledAt = new Date(dto.cancelledAt);
+    if (typeof dto.cancellationReason === 'string') data.cancellationReason = dto.cancellationReason;
+    if (typeof dto.managerNotes === 'string') data.managerNotes = dto.managerNotes;
 
-    if (mappedStatus === 'BOOKED') {
-      const conflicting = await this.prismaService.client.booking.findFirst({
-        where: {
-          unitId: existing.unitId,
-          id: { not: existing.id },
-          status: { in: ['HOLD_REQUESTED', 'HOLD_APPROVED', 'BOOKED'] as any },
-        },
-      });
-
-      if (conflicting) {
-        return {
-          success: false,
-          message: 'Conflict: unit already has an active booking',
-        };
-      }
-    }
-
-    const updated = await this.prismaService.client.booking.update({
+    const updated = await (this.prismaService.client.booking as any).update({
       where: { id },
-      data: { status: mappedStatus as any },
+      data,
     });
 
     return {
