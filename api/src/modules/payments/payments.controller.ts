@@ -1,8 +1,11 @@
 // TODO: Implemented in Phase 7+ after domain blueprint approval
 
-import { Body, Controller, Get, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
 
 import { CreatePaymentDto } from './dto/create-payment.dto';
+import { UpdatePaymentDto } from './dto/update-payment.dto';
+import { MarkReceivedDto } from './dto/mark-received.dto';
+import { CancelPaymentDto } from './dto/cancel-payment.dto';
 import { PaymentsService } from './payments.service';
 
 @Controller('payments')
@@ -20,6 +23,59 @@ export class PaymentsController {
     if (typeof value !== 'string' || !value.trim()) return false;
     const d = new Date(value);
     return !Number.isNaN(d.getTime());
+  }
+
+  @Get('summary')
+  summary() {
+    return this.paymentsService.summary();
+  }
+
+  @Get(':id')
+  findById(@Param('id') id: string) {
+    if (!this.isUuid(id)) {
+      return { success: false, message: 'Invalid payment id' };
+    }
+
+    return this.paymentsService.findById(id);
+  }
+
+  @Patch(':id')
+  update(@Param('id') id: string, @Body() body: UpdatePaymentDto) {
+    if (!this.isUuid(id)) {
+      return { success: false, message: 'Invalid payment id' };
+    }
+
+    if (body?.paidAt && !this.isIsoDate(body.paidAt)) {
+      return { success: false, message: 'Invalid paidAt' };
+    }
+
+    return this.paymentsService.update(id, body);
+  }
+
+  @Post(':id/mark-received')
+  markReceived(@Param('id') id: string, @Body() body: MarkReceivedDto) {
+    if (!this.isUuid(id)) {
+      return { success: false, message: 'Invalid payment id' };
+    }
+
+    if (!this.isIsoDate(body?.paidAt)) {
+      return { success: false, message: 'Invalid paidAt' };
+    }
+
+    return this.paymentsService.markReceived(id, body);
+  }
+
+  @Post(':id/cancel')
+  cancel(@Param('id') id: string, @Body() body: CancelPaymentDto) {
+    if (!this.isUuid(id)) {
+      return { success: false, message: 'Invalid payment id' };
+    }
+
+    if (body?.paidAt && !this.isIsoDate(body.paidAt)) {
+      return { success: false, message: 'Invalid paidAt' };
+    }
+
+    return this.paymentsService.cancel(id, body);
   }
 
   @Post()
@@ -61,8 +117,8 @@ export class PaymentsController {
       return { success: false, message: 'Invalid method' };
     }
 
-    if (body?.paymentDate && !this.isIsoDate(body.paymentDate)) {
-      return { success: false, message: 'Invalid paymentDate' };
+    if (body?.paidAt && !this.isIsoDate(body.paidAt)) {
+      return { success: false, message: 'Invalid paidAt' };
     }
 
     return this.paymentsService.create(body);
