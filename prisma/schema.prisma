@@ -138,6 +138,9 @@ model User {
   tenantId String
   avatar   String?
 
+  projectId String?
+  project   Project? @relation("UserProject", fields: [projectId], references: [id])
+
   /**
    * ---------- LEADS ----------
    */
@@ -236,6 +239,8 @@ model Project {
 
   units Unit[]
   leads Lead[]
+
+  agents User[] @relation("UserProject")
 
   createdAt DateTime  @default(now())
   bookings  Booking[]
