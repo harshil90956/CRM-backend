@@ -10,6 +10,8 @@ import { AuthModule } from './modules/auth/auth.module';
 import { BookingsModule } from './modules/bookings/bookings.module';
 import { LeadsModule } from './modules/leads/leads.module';
 import { PaymentsModule } from './modules/payments/payments.module';
+import { ProjectsModule } from './modules/projects/projects.module';
+import { UsersModule } from './modules/users/users.module';
 import { StaffModule } from './modules/staff/staff.module';
 import { UnitsModule } from './modules/units/units.module';
 import { ProjectsModule } from './modules/projects/projects.module';
@@ -23,6 +25,8 @@ import { ProjectsModule } from './modules/projects/projects.module';
     BookingsModule,
     LeadsModule,
     PaymentsModule,
+    ProjectsModule,
+    UsersModule,
     StaffModule,
     UnitsModule, // REQUIRED (Dev-B fix)
     ProjectsModule,

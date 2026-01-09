@@ -1,4 +1,7 @@
+
 import { Module } from '@nestjs/common';
+
+// TODO: Implemented in Phase 7+ after domain blueprint approval
 import { PrismaModule } from '../../core/database/prisma/prisma.module';
 import { ProjectsController } from './projects.controller';
 import { ProjectsService } from './projects.service';
