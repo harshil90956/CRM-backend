@@ -269,6 +269,16 @@ export class LeadsService {
       throw new NotFoundException('Lead not found');
     }
 
+    if (dto.source !== undefined && dto.source !== null) {
+      this.validateEnum(dto.source, Object.values(LeadSource), 'source');
+    }
+    if (dto.priority !== undefined && dto.priority !== null) {
+      this.validateEnum(dto.priority, Object.values(LeadPriority), 'priority');
+    }
+    if (dto.projectId) {
+      await this.assertProjectExists(dto.projectId);
+    }
+
     const lead = await this.prisma.client.lead.update({
       where: { id },
       data: {
@@ -276,6 +286,10 @@ export class LeadsService {
         email: dto.email,
         phone: dto.phone,
         notes: dto.notes,
+        source: dto.source ?? undefined,
+        priority: dto.priority ?? undefined,
+        projectId: dto.projectId ?? undefined,
+        budget: dto.budget ?? undefined,
       },
       select: this.leadSelect,
     });
