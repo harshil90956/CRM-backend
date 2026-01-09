@@ -14,7 +14,6 @@ import { ProjectsModule } from './modules/projects/projects.module';
 import { UsersModule } from './modules/users/users.module';
 import { StaffModule } from './modules/staff/staff.module';
 import { UnitsModule } from './modules/units/units.module';
-import { ProjectsModule } from './modules/projects/projects.module';
 
 @Module({
   imports: [
@@ -29,7 +28,6 @@ import { ProjectsModule } from './modules/projects/projects.module';
     UsersModule,
     StaffModule,
     UnitsModule, // REQUIRED (Dev-B fix)
-    ProjectsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

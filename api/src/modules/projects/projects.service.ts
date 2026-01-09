@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { ProjectMainType, ProjectStatus } from '@prisma/client';
 import { PrismaService } from '../../core/database/prisma/prisma.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
@@ -55,12 +56,12 @@ export class ProjectsService {
       data: {
         name: dto.name,
         location: dto.location,
-        mainType: dto.mainType,
-        priceRange: dto.priceRange,
-        status: dto.status,
-        isClosed: dto.isClosed,
+        mainType: dto.mainType ?? ProjectMainType.Residential,
+        priceRange: dto.priceRange ?? '',
+        status: dto.status ?? ProjectStatus.Active,
+        isClosed: dto.isClosed ?? false,
         description: dto.description,
-        tenantId: dto.tenantId,
+        tenantId: dto.tenantId ?? 'tenant_default',
       },
       select: this.projectSelect,
     });

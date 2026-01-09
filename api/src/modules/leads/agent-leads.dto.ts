@@ -1,4 +1,5 @@
 import { LeadPriority, LeadSource, LeadStatus } from '@prisma/client';
+import { IsEnum } from 'class-validator';
 
 export class AgentCreateLeadDto {
   name: string;
@@ -25,5 +26,6 @@ export class AgentUpdateLeadDto {
 }
 
 export class AgentUpdateLeadStatusDto {
+  @IsEnum(LeadStatus)
   status: LeadStatus;
 }
