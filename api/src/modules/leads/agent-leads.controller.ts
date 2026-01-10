@@ -3,7 +3,7 @@ import type { Request } from 'express';
 
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import type { JwtPayload } from '../auth/strategies/jwt.strategy.js';
-import { AgentCreateLeadDto, AgentUpdateLeadDto, AgentUpdateLeadStatusDto } from './agent-leads.dto.js';
+import { AgentCreateLeadDto, AgentLogLeadActivityDto, AgentUpdateLeadDto, AgentUpdateLeadStatusDto } from './agent-leads.dto.js';
 import { AgentLeadsService } from './agent-leads.service.js';
 
 @UseGuards(JwtAuthGuard)
@@ -44,6 +44,12 @@ export class AgentLeadsController {
   async updateStatus(@Req() req: Request, @Param('id') id: string, @Body() dto: AgentUpdateLeadStatusDto) {
     const payload = this.getPayload(req);
     return this.agentLeadsService.updateStatus(payload.userId, payload.tenantId, id, dto);
+  }
+
+  @Post(':id/activity')
+  async logActivity(@Req() req: Request, @Param('id') id: string, @Body() dto: AgentLogLeadActivityDto) {
+    const payload = this.getPayload(req);
+    return this.agentLeadsService.logActivity(payload.userId, payload.tenantId, id, dto);
   }
 
   @Get('allowed-actions/:id')

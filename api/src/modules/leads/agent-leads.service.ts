@@ -1,7 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { LeadPriority, LeadSource, LeadStatus } from '@prisma/client';
+import { ActivityType, LeadPriority, LeadSource, LeadStatus } from '@prisma/client';
 import { PrismaService } from '../../core/database/prisma/prisma.service.js';
-import { AgentCreateLeadDto, AgentUpdateLeadDto, AgentUpdateLeadStatusDto } from './agent-leads.dto.js';
+import { AgentCreateLeadDto, AgentLogLeadActivityDto, AgentUpdateLeadDto, AgentUpdateLeadStatusDto } from './agent-leads.dto.js';
 
 @Injectable()
 export class AgentLeadsService {
@@ -236,6 +236,41 @@ export class AgentLeadsService {
         canDelete: false,
       },
       message: 'Allowed actions retrieved successfully',
+    };
+  }
+
+  async logActivity(agentId: string, tenantId: string, leadId: string, dto: AgentLogLeadActivityDto) {
+    await this.getOwnedLeadOrThrow(leadId, agentId, tenantId);
+
+    const typeMap: Record<AgentLogLeadActivityDto['activityType'], ActivityType> = {
+      CALL: ActivityType.call,
+      MEETING: ActivityType.meeting,
+      EMAIL: ActivityType.email,
+      NOTE: ActivityType.note,
+    };
+
+    const nextStatus = dto.status;
+
+    const updatedLead = await this.prisma.client.lead.update({
+      where: { id: leadId },
+      data: {
+        status: nextStatus ? (nextStatus as any) : undefined,
+        activities: {
+          create: {
+            type: typeMap[dto.activityType],
+            message: dto.notes,
+            createdBy: agentId,
+            tenantId,
+          },
+        },
+      },
+      select: this.leadSelect,
+    });
+
+    return {
+      success: true,
+      data: updatedLead,
+      message: 'Activity logged successfully',
     };
   }
 }
