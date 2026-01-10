@@ -1,0 +1,2 @@
+ALTER TABLE `Review`
+  ADD COLUMN `images` JSON NULL;

@@ -103,6 +103,7 @@ enum ReviewStatus {
 enum ReviewType {
   property
   agent
+  project
 }
 
 enum ReminderType {
