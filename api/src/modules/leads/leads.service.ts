@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { LeadPriority, LeadSource, LeadStatus } from '@prisma/client';
 import { PrismaService } from '../../core/database/prisma/prisma.service';
 import { AdminCreateLeadDto } from './dto/admin-create-lead.dto';
@@ -6,6 +6,9 @@ import { AdminUpdateLeadDto } from './dto/admin-update-lead.dto';
 import { AdminUpdateLeadStatusDto } from './dto/admin-update-lead-status.dto';
 import { CreateLeadDto } from './dto/create-lead.dto';
 import { AssignLeadDto } from './dto/assign-lead.dto';
+import { ManagerCreateLeadDto } from './dto/manager-create-lead.dto';
+import { ManagerUpdateLeadStatusDto } from './dto/manager-update-lead-status.dto';
+import { ManagerUpdateLeadDto } from './dto/manager-update-lead.dto';
 
 @Injectable()
 export class LeadsService {
@@ -27,6 +30,41 @@ export class LeadsService {
     createdAt: true,
   } as const;
 
+  private readonly adminLeadSelect = {
+    ...this.leadSelect,
+    project: {
+      select: {
+        id: true,
+        name: true,
+      },
+    },
+  } as const;
+
+  private readonly managerLeadSelect = {
+    id: true,
+    name: true,
+    email: true,
+    phone: true,
+    status: true,
+    priority: true,
+    source: true,
+    budget: true,
+    notes: true,
+    createdAt: true,
+    project: {
+      select: {
+        id: true,
+        name: true,
+      },
+    },
+    assignedTo: {
+      select: {
+        id: true,
+        name: true,
+      },
+    },
+  } as const;
+
   private readonly leadSelectNoEmail = {
     id: true,
     name: true,
@@ -40,6 +78,16 @@ export class LeadsService {
     assignedToId: true,
     tenantId: true,
     createdAt: true,
+  } as const;
+
+  private readonly adminLeadSelectNoEmail = {
+    ...this.leadSelectNoEmail,
+    project: {
+      select: {
+        id: true,
+        name: true,
+      },
+    },
   } as const;
   
 
@@ -74,6 +122,47 @@ export class LeadsService {
     }
   }
 
+  private normalizeLeadSource(value: unknown): unknown {
+    if (typeof value !== 'string') return value;
+
+    const normalized = value
+      .trim()
+      .replace(/[-\s]+/g, '_')
+      .replace(/[^A-Za-z0-9_]/g, '');
+
+    const allowed = Object.values(LeadSource) as string[];
+    if (allowed.includes(normalized)) return normalized;
+    return value;
+  }
+
+  private async resolveProjectIdFromInput(projectInput: string, tenantId: string): Promise<string> {
+    const byId = await this.prisma.client.project.findFirst({
+      where: {
+        id: projectInput,
+        tenantId,
+      },
+      select: { id: true },
+    });
+    if (byId) return byId.id;
+
+    const byName = await this.prisma.client.project.findMany({
+      where: {
+        name: projectInput,
+        tenantId,
+      },
+      select: { id: true },
+      take: 2,
+    });
+
+    if (byName.length === 0) {
+      throw new BadRequestException('Invalid project');
+    }
+    if (byName.length > 1) {
+      throw new BadRequestException('Project name is ambiguous');
+    }
+    return byName[0].id;
+  }
+
   private async assertProjectExists(projectId: string) {
     const project = await this.prisma.client.project.findUnique({
       where: { id: projectId },
@@ -92,6 +181,39 @@ export class LeadsService {
     if (!user) {
       throw new BadRequestException(`${fieldName} does not exist`);
     }
+  }
+
+  private async getManagerAgentIds(managerId: string, tenantId: string): Promise<string[]> {
+    const agents = await this.prisma.client.user.findMany({
+      where: {
+        managerId,
+        tenantId,
+        role: 'AGENT' as any,
+      },
+      select: { id: true },
+    });
+    return agents.map((a) => a.id);
+  }
+
+  private async assertLeadInManagerScope(managerId: string, tenantId: string, leadId: string) {
+    const lead = await this.prisma.client.lead.findFirst({
+      where: {
+        id: leadId,
+        tenantId,
+        assignedTo: {
+          managerId,
+        },
+      },
+      select: {
+        id: true,
+        status: true,
+      },
+    });
+
+    if (!lead) {
+      throw new NotFoundException('Lead not found');
+    }
+    return lead;
   }
 
   async create(createLeadDto: CreateLeadDto) {
@@ -209,13 +331,141 @@ export class LeadsService {
     };
   }
 
-  async findAdminLeads() {
-    const leads = await this.prisma.client.lead.findMany({
+  async getManagerAgents(managerId: string, tenantId: string) {
+    const agents = await this.prisma.client.user.findMany({
       where: {
-        assignedToId: null,
+        managerId,
+        tenantId,
+        role: 'AGENT' as any,
+        isActive: true,
       },
-      select: this.leadSelect,
+      select: {
+        id: true,
+        name: true,
+      },
+      orderBy: { createdAt: 'asc' as any },
     });
+
+    return {
+      success: true,
+      data: agents,
+      message: 'Agents retrieved successfully',
+    };
+  }
+
+  async createManagerLead(managerId: string, tenantId: string, dto: ManagerCreateLeadDto) {
+    this.requireDefined(dto.name, 'name');
+    this.requireDefined(dto.email, 'email');
+    this.requireDefined(dto.phone, 'phone');
+    this.requireDefined(dto.source, 'source');
+    this.requireDefined(dto.budget, 'budget');
+
+    dto.source = this.normalizeLeadSource(dto.source) as any;
+    this.validateEnum(dto.source, Object.values(LeadSource), 'source');
+    if (dto.priority !== undefined && dto.priority !== null) {
+      this.validateEnum(dto.priority, Object.values(LeadPriority), 'priority');
+    }
+
+    let resolvedProjectId: string | null = null;
+    if (dto.projectId) {
+      resolvedProjectId = await this.resolveProjectIdFromInput(dto.projectId, tenantId);
+    }
+
+    if (dto.assignedToId) {
+      await this.assertUserExists(dto.assignedToId, 'assignedToId');
+      const agentIds = await this.getManagerAgentIds(managerId, tenantId);
+      if (!agentIds.includes(dto.assignedToId)) {
+        throw new ForbiddenException('Cannot assign lead to this agent');
+      }
+    }
+
+    const lead = await this.prisma.client.lead.create({
+      data: {
+        name: dto.name,
+        email: dto.email,
+        phone: dto.phone,
+        source: dto.source as any,
+        priority: dto.priority as any,
+        budget: String(dto.budget),
+        notes: dto.notes ?? null,
+        projectId: resolvedProjectId,
+        assignedToId: dto.assignedToId ?? null,
+        tenantId,
+        status: LeadStatus.NEW,
+      },
+      select: this.managerLeadSelect,
+    });
+
+    return {
+      success: true,
+      data: lead,
+      message: 'Lead created successfully',
+    };
+  }
+
+  async updateManagerLead(managerId: string, tenantId: string, id: string, dto: ManagerUpdateLeadDto) {
+    const existing = await this.assertLeadInManagerScope(managerId, tenantId, id);
+    const isClosed = existing.status === LeadStatus.CONVERTED || existing.status === LeadStatus.LOST;
+    if (isClosed) {
+      throw new ForbiddenException('Cannot edit a closed lead');
+    }
+
+    if (dto.source !== undefined) {
+      dto.source = this.normalizeLeadSource(dto.source) as any;
+      this.validateEnum(dto.source, Object.values(LeadSource), 'source');
+    }
+    if (dto.priority !== undefined && dto.priority !== null) {
+      this.validateEnum(dto.priority, Object.values(LeadPriority), 'priority');
+    }
+
+    let resolvedProjectId: string | undefined = undefined;
+    if (dto.projectId) {
+      resolvedProjectId = await this.resolveProjectIdFromInput(dto.projectId, tenantId);
+    }
+
+    const lead = await this.prisma.client.lead.update({
+      where: { id },
+      data: {
+        name: dto.name,
+        email: dto.email,
+        phone: dto.phone,
+        source: dto.source as any,
+        priority: dto.priority as any,
+        budget: dto.budget,
+        notes: dto.notes,
+        projectId: resolvedProjectId,
+      },
+      select: this.managerLeadSelect,
+    });
+
+    return {
+      success: true,
+      data: lead,
+      message: 'Lead updated successfully',
+    };
+  }
+
+  async findAdminLeads() {
+    let leads: any[];
+    try {
+      leads = await this.prisma.client.lead.findMany({
+        where: {
+          assignedToId: null,
+        },
+        select: this.adminLeadSelect,
+      });
+    } catch (e) {
+      const err = e as any;
+      if (err?.code !== 'P2022' && !this.isMissingLeadEmailColumn(e)) {
+        throw e;
+      }
+      leads = await this.prisma.client.lead.findMany({
+        where: {
+          assignedToId: null,
+        },
+        select: this.adminLeadSelectNoEmail,
+      });
+    }
 
     return {
       success: true,
@@ -251,7 +501,7 @@ export class LeadsService {
         projectId: dto.projectId,
         tenantId: dto.tenantId,
         status: LeadStatus.NEW,
-        budget: '',
+        budget: dto.budget === undefined || dto.budget === null ? '' : String(dto.budget),
       },
       select: this.leadSelect,
     });
@@ -269,6 +519,16 @@ export class LeadsService {
       throw new NotFoundException('Lead not found');
     }
 
+    if (dto.source !== undefined && dto.source !== null) {
+      this.validateEnum(dto.source, Object.values(LeadSource), 'source');
+    }
+    if (dto.priority !== undefined && dto.priority !== null) {
+      this.validateEnum(dto.priority, Object.values(LeadPriority), 'priority');
+    }
+    if (dto.projectId) {
+      await this.assertProjectExists(dto.projectId);
+    }
+
     const lead = await this.prisma.client.lead.update({
       where: { id },
       data: {
@@ -276,6 +536,10 @@ export class LeadsService {
         email: dto.email,
         phone: dto.phone,
         notes: dto.notes,
+        source: dto.source as any,
+        priority: dto.priority as any,
+        projectId: dto.projectId === '' ? null : (dto.projectId ?? undefined),
+        budget: dto.budget === undefined || dto.budget === null ? undefined : String(dto.budget),
       },
       select: this.leadSelect,
     });
@@ -344,6 +608,114 @@ export class LeadsService {
         assigned,
       },
       message: 'Leads stats retrieved successfully',
+    };
+  }
+
+  async findManagerLeads(managerId: string, tenantId: string) {
+    const agentIds = await this.getManagerAgentIds(managerId, tenantId);
+
+    if (agentIds.length === 0) {
+      return {
+        success: true,
+        data: [],
+        message: 'Leads retrieved successfully',
+      };
+    }
+
+    const leads = await this.prisma.client.lead.findMany({
+      where: {
+        tenantId,
+        assignedToId: { in: agentIds },
+      },
+      select: this.managerLeadSelect,
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return {
+      success: true,
+      data: leads,
+      message: 'Leads retrieved successfully',
+    };
+  }
+
+  async updateManagerLeadStatus(managerId: string, tenantId: string, id: string, dto: ManagerUpdateLeadStatusDto) {
+    this.requireDefined(dto.status, 'status');
+    this.validateEnum(dto.status, Object.values(LeadStatus), 'status');
+
+    const existing = await this.assertLeadInManagerScope(managerId, tenantId, id);
+    const isClosed = existing.status === LeadStatus.CONVERTED || existing.status === LeadStatus.LOST;
+    if (isClosed) {
+      throw new ForbiddenException('Cannot change status of a closed lead');
+    }
+
+    const lead = await this.prisma.client.lead.update({
+      where: { id },
+      data: {
+        status: dto.status as LeadStatus,
+      },
+      select: this.managerLeadSelect,
+    });
+
+    return {
+      success: true,
+      data: lead,
+      message: 'Lead status updated successfully',
+    };
+  }
+
+  async assignManagerLead(managerId: string, tenantId: string, id: string, dto: AssignLeadDto) {
+    this.requireDefined(dto.assignedToId, 'assignedToId');
+
+    const existing = await this.assertLeadInManagerScope(managerId, tenantId, id);
+    const isClosed = existing.status === LeadStatus.CONVERTED || existing.status === LeadStatus.LOST;
+    if (isClosed) {
+      throw new ForbiddenException('Cannot assign a closed lead');
+    }
+
+    await this.assertUserExists(dto.assignedToId, 'assignedToId');
+
+    const agentIds = await this.getManagerAgentIds(managerId, tenantId);
+    if (!agentIds.includes(dto.assignedToId)) {
+      throw new ForbiddenException('Cannot assign lead to this agent');
+    }
+
+    const lead = await this.prisma.client.lead.update({
+      where: { id },
+      data: {
+        assignedToId: dto.assignedToId,
+      },
+      select: this.managerLeadSelect,
+    });
+
+    return {
+      success: true,
+      data: lead,
+      message: 'Lead assigned successfully',
+    };
+  }
+
+  async getManagerLeadStatusList() {
+    return {
+      success: true,
+      data: ['NEW', 'CONTACTED', 'FOLLOWUP', 'NEGOTIATION', 'CONVERTED', 'LOST'],
+      message: 'Lead statuses retrieved successfully',
+    };
+  }
+
+  async getManagerAllowedActions(managerId: string, tenantId: string, id: string) {
+    const lead = await this.assertLeadInManagerScope(managerId, tenantId, id);
+
+    const isClosed = lead.status === LeadStatus.CONVERTED || lead.status === LeadStatus.LOST;
+
+    return {
+      success: true,
+      data: {
+        canEdit: !isClosed,
+        canAssign: !isClosed,
+        canChangeStatus: !isClosed,
+        canDelete: false,
+      },
+      message: 'Allowed actions retrieved successfully',
     };
   }
 

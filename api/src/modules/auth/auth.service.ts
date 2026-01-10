@@ -26,6 +26,7 @@ export class AuthService {
   private readonly logger = new Logger(AuthService.name);
   private readonly transporter: Transporter;
   private readonly otpFrom: string;
+  private readonly emailEnabled: boolean;
 
   constructor(
     private readonly prismaService: PrismaService,
@@ -45,6 +46,7 @@ export class AuthService {
     const secure = secureRaw ? secureRaw === 'true' : port === 465;
 
     if (host && Number.isFinite(port) && user && pass) {
+      this.emailEnabled = true;
       this.transporter = nodemailer.createTransport({
         host,
         port,
@@ -52,6 +54,7 @@ export class AuthService {
         auth: { user, pass },
       });
     } else {
+      this.emailEnabled = false;
       this.transporter = nodemailer.createTransport({ jsonTransport: true });
     }
   }
@@ -65,10 +68,16 @@ export class AuthService {
   }
 
   private generateOtp(): string {
+    const devOtp = this.configService.get<string>('AUTH_DEV_OTP')?.trim();
+    const nodeEnv = this.configService.get<string>('NODE_ENV')?.trim();
+
+    if (devOtp) return devOtp;
+    if (!nodeEnv || nodeEnv !== 'production') return '123456';
+
     return Math.floor(100000 + Math.random() * 900000).toString();
   }
 
-  async sendOtp(dto: SendOtpDto): Promise<{ success: true }> {
+  async sendOtp(dto: SendOtpDto): Promise<{ success: true; debugOtp?: string }> {
     const email = this.normalizeEmail(dto?.email ?? '');
 
     if (!this.isValidEmail(email)) {
@@ -85,6 +94,16 @@ export class AuthService {
         expiresAt,
       },
     });
+
+    const nodeEnv = this.configService.get<string>('NODE_ENV')?.trim();
+    if (!this.emailEnabled) {
+      if (nodeEnv === 'production') {
+        throw new InternalServerErrorException('SMTP is not configured');
+      }
+
+      this.logger.warn(`SMTP is not configured. OTP for ${email}: ${code}`);
+      return { success: true, debugOtp: code };
+    }
 
     try {
       await this.transporter.sendMail({
