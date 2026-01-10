@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   ForbiddenException,
   Get,
   NotFoundException,
@@ -18,6 +19,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import type { JwtPayload } from '../auth/strategies/jwt.strategy.js';
 import { LeadPriority, LeadSource, LeadStatus } from '@prisma/client';
 import { PrismaService } from '../../core/database/prisma/prisma.service.js';
+import { LeadPermissionsService } from './lead-permissions.service';
 import { AssignLeadDto } from './dto/assign-lead.dto.js';
 import { ManagerCreateLeadDto } from './dto/manager-create-lead.dto.js';
 import { ManagerUpdateLeadStatusDto } from './dto/manager-update-lead-status.dto.js';
@@ -26,7 +28,10 @@ import { ManagerUpdateLeadDto } from './dto/manager-update-lead.dto.js';
 @UseGuards(JwtAuthGuard)
 @Controller('manager/leads')
 export class ManagerLeadsController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly leadPermissionsService: LeadPermissionsService,
+  ) {}
 
   private readonly managerLeadSelect = {
     id: true,
@@ -390,15 +395,44 @@ export class ManagerLeadsController {
     const lead = await this.getLeadInTenantOrThrow(id, payload.tenantId);
     const isClosed = lead.status === LeadStatus.CONVERTED || lead.status === LeadStatus.LOST;
 
+    const cfg = this.leadPermissionsService.getConfig();
+
     return {
       success: true,
       data: {
-        canEdit: !isClosed,
+        canEdit: !isClosed && cfg.managerCanEdit,
         canAssign: !isClosed,
         canChangeStatus: !isClosed,
-        canDelete: false,
+        canDelete: !isClosed && cfg.managerCanDelete,
       },
       message: 'Allowed actions retrieved successfully',
+    };
+  }
+
+  @Delete(':id')
+  async remove(@Req() req: Request, @Param('id') id: string) {
+    const payload = this.getPayload(req);
+
+    const lead = await this.getLeadInTenantOrThrow(id, payload.tenantId);
+    const isClosed = lead.status === LeadStatus.CONVERTED || lead.status === LeadStatus.LOST;
+
+    const cfg = this.leadPermissionsService.getConfig();
+    if (isClosed) {
+      throw new ForbiddenException('Cannot delete a closed lead');
+    }
+    if (!cfg.managerCanDelete) {
+      throw new ForbiddenException('Deleting leads is disabled for managers');
+    }
+
+    const deleted = await this.prisma.client.lead.delete({
+      where: { id },
+      select: this.managerLeadSelect,
+    });
+
+    return {
+      success: true,
+      data: deleted,
+      message: 'Lead deleted successfully',
     };
   }
 }
