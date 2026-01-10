@@ -1,4 +1,5 @@
 import { LeadPriority, LeadSource, LeadStatus } from '@prisma/client';
+import { IsEnum, IsIn, IsOptional, IsString } from 'class-validator';
 
 export class AgentCreateLeadDto {
   name: string;
@@ -26,4 +27,16 @@ export class AgentUpdateLeadDto {
 
 export class AgentUpdateLeadStatusDto {
   status: LeadStatus;
+}
+
+export class AgentLogLeadActivityDto {
+  @IsIn(['CALL', 'MEETING', 'EMAIL', 'NOTE'])
+  activityType: 'CALL' | 'MEETING' | 'EMAIL' | 'NOTE';
+
+  @IsString()
+  notes: string;
+
+  @IsOptional()
+  @IsEnum(LeadStatus)
+  status?: LeadStatus;
 }
