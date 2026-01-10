@@ -10,9 +10,7 @@ export class AdminCreateLeadDto {
 
   @IsString()
   phone: string;
-
-  @IsOptional()
-  @IsString()
+  budget?: string | number | null;
   notes?: string;
 
   @IsOptional()

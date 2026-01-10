@@ -30,6 +30,16 @@ export class LeadsService {
     createdAt: true,
   } as const;
 
+  private readonly adminLeadSelect = {
+    ...this.leadSelect,
+    project: {
+      select: {
+        id: true,
+        name: true,
+      },
+    },
+  } as const;
+
   private readonly managerLeadSelect = {
     id: true,
     name: true,
@@ -68,6 +78,16 @@ export class LeadsService {
     assignedToId: true,
     tenantId: true,
     createdAt: true,
+  } as const;
+
+  private readonly adminLeadSelectNoEmail = {
+    ...this.leadSelectNoEmail,
+    project: {
+      select: {
+        id: true,
+        name: true,
+      },
+    },
   } as const;
   
 
@@ -426,12 +446,26 @@ export class LeadsService {
   }
 
   async findAdminLeads() {
-    const leads = await this.prisma.client.lead.findMany({
-      where: {
-        assignedToId: null,
-      },
-      select: this.leadSelect,
-    });
+    let leads: any[];
+    try {
+      leads = await this.prisma.client.lead.findMany({
+        where: {
+          assignedToId: null,
+        },
+        select: this.adminLeadSelect,
+      });
+    } catch (e) {
+      const err = e as any;
+      if (err?.code !== 'P2022' && !this.isMissingLeadEmailColumn(e)) {
+        throw e;
+      }
+      leads = await this.prisma.client.lead.findMany({
+        where: {
+          assignedToId: null,
+        },
+        select: this.adminLeadSelectNoEmail,
+      });
+    }
 
     return {
       success: true,
@@ -467,7 +501,7 @@ export class LeadsService {
         projectId: dto.projectId,
         tenantId: dto.tenantId,
         status: LeadStatus.NEW,
-        budget: '',
+        budget: dto.budget === undefined || dto.budget === null ? '' : String(dto.budget),
       },
       select: this.leadSelect,
     });
@@ -502,10 +536,10 @@ export class LeadsService {
         email: dto.email,
         phone: dto.phone,
         notes: dto.notes,
-        source: dto.source ?? undefined,
-        priority: dto.priority ?? undefined,
-        projectId: dto.projectId ?? undefined,
-        budget: dto.budget ?? undefined,
+        source: dto.source as any,
+        priority: dto.priority as any,
+        projectId: dto.projectId === '' ? null : (dto.projectId ?? undefined),
+        budget: dto.budget === undefined || dto.budget === null ? undefined : String(dto.budget),
       },
       select: this.leadSelect,
     });
