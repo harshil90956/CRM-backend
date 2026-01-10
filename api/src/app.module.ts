@@ -12,6 +12,7 @@ import { LeadsModule } from './modules/leads/leads.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { StaffModule } from './modules/staff/staff.module';
 import { UnitsModule } from './modules/units/units.module';
+import { ReviewsModule } from './modules/reviews/reviews.module';
 
 @Module({
   imports: [
@@ -23,7 +24,8 @@ import { UnitsModule } from './modules/units/units.module';
     LeadsModule,
     PaymentsModule,
     StaffModule,
-    UnitsModule, // ✅ REQUIRED (Dev-B fix)
+    UnitsModule, // REQUIRED (Dev-B fix)
+    ReviewsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

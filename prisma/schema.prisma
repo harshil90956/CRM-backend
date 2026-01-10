@@ -103,6 +103,7 @@ enum ReviewStatus {
 enum ReviewType {
   property
   agent
+  project
 }
 
 enum ReminderType {
@@ -363,6 +364,7 @@ model Review {
 
   rating  Int
   comment String
+  images  Json?
   status  ReviewStatus
 
   tenantId  String
